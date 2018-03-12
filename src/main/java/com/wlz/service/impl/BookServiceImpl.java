@@ -3,15 +3,22 @@ package com.wlz.service.impl;
 import com.wlz.dao.AppointmentDao;
 import com.wlz.dao.BookDao;
 import com.wlz.dto.AppointExecution;
+import com.wlz.entity.Appointment;
 import com.wlz.entity.Book;
+import com.wlz.enums.AppointStateEnum;
+import com.wlz.exception.AppointException;
+import com.wlz.exception.NoNumberException;
+import com.wlz.exception.RepeatAppointException;
 import com.wlz.service.BookService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Service
 public class BookServiceImpl implements BookService {
 
     private Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -43,6 +50,31 @@ public class BookServiceImpl implements BookService {
      * 3.不是所有的方法都需要事务，如只有一条修改操作，只读操作不需要事务控制
      */
     public AppointExecution appoint(long bookId, long studentId) {
-        return null;
+
+        try{
+
+            //减库存
+            int update=bookDao.reduceNumber(bookId);
+            if(update<=0){
+                throw new NoNumberException("no number");
+            }else{
+                int insert=appointmentDao.insertAppointment(bookId,studentId);
+                if(insert<=0){
+                    throw new RepeatAppointException("repeat appoint");
+                }else {
+                    Appointment appointment = appointmentDao.queryByKeyWithBook(bookId, studentId);
+                    return new AppointExecution(bookId, AppointStateEnum.SUCCESS, appointment);
+                }
+            }
+        }catch (NoNumberException e1) {
+            throw e1;
+        } catch (RepeatAppointException e2) {
+            throw e2;
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            // 所有编译期异常转换为运行期异常
+            //return new AppointExecution(bookId, AppointStateEnum.INNER_ERROR);//错误写法
+            throw new AppointException("appoint inner error:" + e.getMessage());
+        }
     }
 }
